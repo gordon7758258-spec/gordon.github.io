@@ -484,10 +484,25 @@
         const rankTitle = document.getElementById('rankTitle');
         const nicknameInput = document.getElementById('nicknameInput');
 
+        
         // 初始化昵称（从本地存储读取）
         nicknameInput.value = localStorage.getItem('schulte_nickname') || '';
-        nicknameInput.addEventListener('input', () => {
-            localStorage.setItem('schulte_nickname', nicknameInput.value.trim());
+
+        // 昵称变化时：保存 + 刷新个人成绩（回车或失焦时触发，避免输入时频繁刷新）
+        function refreshIdentity() {
+            const nickname = nicknameInput.value.trim();
+            if (nickname) {
+                localStorage.setItem('schulte_nickname', nickname);
+            }
+        // 切换身份后，刷新最佳成绩显示
+        updateBestScoresDisplay();
+        }
+
+        nicknameInput.addEventListener('blur', refreshIdentity);
+        nicknameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                nicknameInput.blur(); // 回车自动失焦，触发刷新
+            }
         });
 
         // ========== 工具函数 ==========
@@ -705,15 +720,16 @@
                 timestamp: Date.now()
             };
 
-            // 1. 本地存储
-            if (isWin) {
-                const bestKey = `schulte_best_${level}`;
-                const currentBest = localStorage.getItem(bestKey);
-                if (!currentBest || elapsed < parseInt(currentBest)) {
-                    localStorage.setItem(bestKey, elapsed.toString());
-                }
+        // 1. 本地存储（按昵称独立隔离）
+        if (isWin) {
+            const nickname = nicknameInput.value.trim() || '匿名玩家';
+            // 存储Key格式：schulte_best_昵称_难度，每个昵称独立一套记录
+            const bestKey = `schulte_best_${nickname}_${level}`;
+            const currentBest = localStorage.getItem(bestKey);
+            if (!currentBest || elapsed < parseInt(currentBest)) {
+                localStorage.setItem(bestKey, elapsed.toString());
             }
-
+        }
             const historyKey = 'schulte_history';
             let history = JSON.parse(localStorage.getItem(historyKey)) || [];
             history.unshift(record);
@@ -790,17 +806,22 @@
             rankTitle.textContent = `🏆 全服排行榜（${GAME_CONFIG[currentLevel].label}）`;
         }
 
-        // 更新个人最佳显示
+        // 更新个人最佳显示（仅显示当前昵称的成绩）
         function updateBestScoresDisplay() {
+            const nickname = nicknameInput.value.trim() || '匿名玩家';
             let html = '';
+    
             [3, 5, 6].forEach(level => {
-                const best = localStorage.getItem(`schulte_best_${level}`);
+            // 只读取当前昵称对应的最佳记录
+                const bestKey = `schulte_best_${nickname}_${level}`;
+                const best = localStorage.getItem(bestKey);
                 const timeStr = best ? formatElapsedTime(parseInt(best)) : '暂无记录';
                 html += `<div class="score-row">
                     <span>${GAME_CONFIG[level].label}</span>
                     <span>${timeStr}</span>
                 </div>`;
             });
+    
             bestScoresList.innerHTML = html;
         }
 
