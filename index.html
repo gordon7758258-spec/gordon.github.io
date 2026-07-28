@@ -386,7 +386,7 @@
 
     <!-- 全服排行榜 -->
     <div class="score-panel">
-        <h3>🏆 全服排行榜（标准5×5）</h3>
+        <h3 id="rankTitle">🏆 全服排行榜（标准5×5）</h3>
         <div id="rankList"></div>
     </div>
 
@@ -413,7 +413,8 @@
             const manifestData = {
                 name: "舒尔特方格专注力训练",
                 short_name: "舒尔特方格",
-                start_url: ".",
+                start_url: location.pathname,
+                scope: location.pathname,
                 display: "standalone",
                 background_color: "#f5f5f0",
                 theme_color: "#81c784",
@@ -480,7 +481,7 @@
         const modalProgress = document.getElementById('modalProgress');
         const modalCloseBtn = document.getElementById('modalCloseBtn');
         const bestScoresList = document.getElementById('bestScoresList');
-        const rankList = document.getElementById('rankList');
+        const rankTitle = document.getElementById('rankTitle');
         const nicknameInput = document.getElementById('nicknameInput');
 
         // 初始化昵称（从本地存储读取）
@@ -688,6 +689,7 @@
             });
 
             resetGame();
+            updateRankTitle();
             loadRankList(); // 切换难度刷新对应排行榜
         }
 
@@ -783,6 +785,11 @@
             }
         }
 
+        // 【新增】更新排行榜标题（随当前难度变化）
+        function updateRankTitle() {
+            rankTitle.textContent = `🏆 全服排行榜（${GAME_CONFIG[currentLevel].label}）`;
+        }
+
         // 更新个人最佳显示
         function updateBestScoresDisplay() {
             let html = '';
@@ -820,6 +827,7 @@
         function init() {
             renderGrid();
             updateBestScoresDisplay();
+            updateRankTitle();
             loadRankList();
             countdownEl.textContent = formatCountdown(GAME_CONFIG[currentLevel].timeLimit);
         }
