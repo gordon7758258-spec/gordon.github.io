@@ -198,6 +198,15 @@
             animation: win-pop 0.7s ease-in-out;
         }
 
+        /* 游戏未开始时，非1数字模糊遮罩 */
+        .grid-cell.blur-hide {
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            background-color: rgba(60,60,60,0.4) !important;
+            color: transparent !important;
+            pointer-events: none; /* 模糊格子开局前禁止点击 */
+        }
+        
         @keyframes win-pop {
             0% { transform: scale(1); }
             30% { transform: scale(1.15); }
@@ -560,10 +569,12 @@
             
             gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
             gridContainer.innerHTML = '';
-
+        
             numbers.forEach((num, index) => {
                 const cell = document.createElement('div');
                 cell.className = 'grid-cell';
+                // 待机状态：除数字1外全部模糊遮挡
+                if(num !== 1) cell.classList.add('blur-hide');
                 cell.textContent = num;
                 cell.dataset.number = num;
                 cell.style.backgroundColor = getSoftColor(index, total);
@@ -577,18 +588,22 @@
         
             if (gameState === 'idle') {
                 if (num === 1) {
-                    // ========== 新增：昵称校验 ==========
+                    // ========== 昵称校验 ==========
                     const nickname = nicknameInput.value.trim();
                     if (!nickname) {
                         tipText.textContent = '请先输入昵称再开始游戏';
                         tipText.classList.add('error');
-                        triggerVibration(); // 轻微震动提示
-                        return; // 不启动游戏
+                        triggerVibration();
+                        return;
                     }
                     // ====================================
-                    
+                
                     startGame();
                     markCompleted(cell);
+                    // 关键：清除所有格子的模糊遮罩
+                    document.querySelectorAll('.grid-cell.blur-hide').forEach(el => {
+                        el.classList.remove('blur-hide');
+                    });
                     targetNumber = 2;
                     updateTip();
                 }
