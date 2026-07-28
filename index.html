@@ -106,7 +106,10 @@
             height: 1.6rem;
             font-weight: 500;
         }
-
+        .tip-bar.error {
+            color: #c62828;
+            font-weight: 600;
+        }
         /* ========== 难度选择按钮 ========== */
         .difficulty-group {
             display: flex;
@@ -382,6 +385,10 @@
     <div class="score-panel">
         <h3>我的最佳成绩</h3>
         <div id="bestScoresList"></div>
+        <div class="score-row">
+            <span>本局累计错误</span>
+            <span id="totalErrorCount">0</span>
+        </div>
     </div>
 
     <!-- 全服排行榜 -->
@@ -483,7 +490,7 @@
         const bestScoresList = document.getElementById('bestScoresList');
         const rankTitle = document.getElementById('rankTitle');
         const nicknameInput = document.getElementById('nicknameInput');
-
+        const totalErrorCountEl = document.getElementById('totalErrorCount');
         
         // 初始化昵称（从本地存储读取）
         nicknameInput.value = localStorage.getItem('schulte_nickname') || '';
@@ -496,8 +503,16 @@
             }
         // 切换身份后，刷新最佳成绩显示
         updateBestScoresDisplay();
+        refreshTotalErrorUI();
         }
-
+        nicknameInput.addEventListener('input', () => {
+            localStorage.setItem('schulte_nickname', nicknameInput.value.trim());
+            // 新增：输入时如果游戏还没开始，恢复正常提示
+            if (gameState === 'idle') {
+                tipText.textContent = '点击数字 1 开始挑战';
+                tipText.classList.remove('error');
+            }
+        });
         nicknameInput.addEventListener('blur', refreshIdentity);
         nicknameInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -561,9 +576,19 @@
 
         function handleCellClick(cell, num) {
             if (gameState === 'ended') return;
-
+        
             if (gameState === 'idle') {
                 if (num === 1) {
+                    // ========== 新增：昵称校验 ==========
+                    const nickname = nicknameInput.value.trim();
+                    if (!nickname) {
+                        tipText.textContent = '请先输入昵称再开始游戏';
+                        tipText.classList.add('error');
+                        triggerVibration(); // 轻微震动提示
+                        return; // 不启动游戏
+                    }
+                    // ====================================
+                    
                     startGame();
                     markCompleted(cell);
                     targetNumber = 2;
@@ -571,12 +596,13 @@
                 }
                 return;
             }
-
+        
+            // 后面原有逻辑保持不变
             if (cell.classList.contains('completed')) {
                 showError(cell);
                 return;
             }
-
+        
             if (num === targetNumber) {
                 markCompleted(cell);
                 targetNumber++;
@@ -644,6 +670,7 @@
 
             // 保存成绩（本地+云端）
             saveRecord(true);
+            saveTotalError(errorCount);
             updateBestScoresDisplay();
             loadRankList(); // 刷新排行榜
 
@@ -657,6 +684,8 @@
             countdownEl.textContent = '0.0';
 
             saveRecord(false);
+            // 累加本局错误到总记录
+            saveTotalError(errorCount);
             showResultModal(false);
         }
 
@@ -822,7 +851,28 @@
         function updateRankTitle() {
             rankTitle.textContent = `🏆 全服排行榜（${GAME_CONFIG[currentLevel].label}）`;
         }
-
+        // 获取当前昵称累计总错误
+        function getTotalErrorRecord() {
+            const nickname = nicknameInput.value.trim() || '匿名玩家';
+            const errKey = `schulte_total_err_${nickname}`;
+            return parseInt(localStorage.getItem(errKey)) || 0;
+        }
+        
+        // 累加保存总错误次数
+        function saveTotalError(addNum) {
+            const nickname = nicknameInput.value.trim() || '匿名玩家';
+            const errKey = `schulte_total_err_${nickname}`;
+            const oldTotal = getTotalErrorRecord();
+            const newTotal = oldTotal + addNum;
+            localStorage.setItem(errKey, newTotal.toString());
+            // 刷新页面显示
+            totalErrorCountEl.textContent = newTotal;
+        }
+        
+        // 刷新累计错误显示
+        function refreshTotalErrorUI() {
+            totalErrorCountEl.textContent = getTotalErrorRecord();
+        }
         // 更新个人最佳显示（仅显示当前昵称的成绩）
         function updateBestScoresDisplay() {
             const nickname = nicknameInput.value.trim() || '匿名玩家';
@@ -868,6 +918,7 @@
             updateRankTitle();
             loadRankList();
             countdownEl.textContent = formatCountdown(GAME_CONFIG[currentLevel].timeLimit);
+            refreshTotalErrorUI();
         }
 
         init();
