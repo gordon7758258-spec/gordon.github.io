@@ -405,7 +405,7 @@
         // ===================== 请替换成你自己的Supabase参数 =====================
         const SUPABASE_URL = "https://tjtqutpnimllkzsmqfbb.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqdHF1dHBuaW1sbGt6c21xZmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTc2NjMsImV4cCI6MjEwMDc3MzY2M30.PGrAXVzJd9Yys8yMo2ap5kfYvffGgl9xqs3BZWz1E8c";
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         // =====================================================================
 
         // ========== PWA 配置 ==========
@@ -727,7 +727,7 @@
         // 上传成绩到云端
         async function uploadToCloud(nickname, level, time, errors) {
             try {
-                await supabase.from('game_records').insert({
+                await sbClient.from('game_records').insert({
                     nickname,
                     level,
                     time,
@@ -746,7 +746,7 @@
             }
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await sbClient
                     .from('game_records')
                     .select('nickname, time, level')
                     .eq('level', currentLevel)
