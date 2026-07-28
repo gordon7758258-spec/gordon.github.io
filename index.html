@@ -496,24 +496,22 @@
         nicknameInput.value = localStorage.getItem('schulte_nickname') || '';
 
         // 昵称变化时：保存 + 刷新个人成绩（回车或失焦时触发，避免输入时频繁刷新）
-        function refreshIdentity() {
-            const nickname = nicknameInput.value.trim();
-            if (nickname) {
-                localStorage.setItem('schulte_nickname', nickname);
-            }
-        // 切换身份后，刷新最佳成绩显示
-        updateBestScoresDisplay();
-        refreshTotalErrorUI();
-        }
+        
         nicknameInput.addEventListener('input', () => {
-            localStorage.setItem('schulte_nickname', nicknameInput.value.trim());
-            // 新增：输入时如果游戏还没开始，恢复正常提示
+            const currentNick = nicknameInput.value.trim();
+            localStorage.setItem('schulte_nickname', currentNick);
+            
+            // 实时刷新：边输入昵称，边更新最佳成绩面板
+            updateBestScoresDisplay();
+            // 实时刷新累计总错误次数
+            refreshTotalErrorUI();
+        
+            // 游戏未开局时，输入文字自动清除昵称错误提示
             if (gameState === 'idle') {
                 tipText.textContent = '点击数字 1 开始挑战';
                 tipText.classList.remove('error');
             }
         });
-        nicknameInput.addEventListener('blur', refreshIdentity);
         nicknameInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 nicknameInput.blur(); // 回车自动失焦，触发刷新
@@ -686,6 +684,9 @@
             saveRecord(false);
             // 累加本局错误到总记录
             saveTotalError(errorCount);
+            // 失败后同步刷新成绩面板
+            updateBestScoresDisplay();
+            refreshTotalErrorUI();
             showResultModal(false);
         }
 
