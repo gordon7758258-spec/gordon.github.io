@@ -756,36 +756,53 @@
             }
         }
 
-        // 加载排行榜（默认加载当前难度Top10）
+        // 加载排行榜（每个昵称仅显示最佳成绩，取Top10）
         async function loadRankList() {
             if (SUPABASE_URL === "你的Project URL") {
                 rankList.innerHTML = '<div style="color:#999;font-size:0.85rem;">配置Supabase后显示排行榜</div>';
                 return;
             }
-
+        
             try {
+                // 先拉取该难度下前100条记录（留足去重空间，避免前10条都是同一人导致榜单不满）
                 const { data, error } = await sbClient
                     .from('game_records')
                     .select('nickname, time, level')
                     .eq('level', currentLevel)
                     .eq('is_win', true)
                     .order('time', { ascending: true })
-                    .limit(10);
-
+                    .limit(100);
+        
                 if (error) throw error;
-
+        
                 if (data.length === 0) {
                     rankList.innerHTML = '<div style="color:#999;font-size:0.85rem;">暂无记录，快来抢占榜首！</div>';
                     return;
                 }
-
+        
+                // ========== 核心：按昵称去重，只保留每个人的最佳成绩 ==========
+                const bestMap = new Map();
+                data.forEach(item => {
+                    const name = item.nickname;
+                    // 如果该昵称还没记录，或者当前这条用时更短，就更新
+                    if (!bestMap.has(name) || item.time < bestMap.get(name).time) {
+                        bestMap.set(name, item);
+                    }
+                });
+        
+                // 把去重后的结果转成数组，再次按用时升序排序，取前10名
+                const rankData = Array.from(bestMap.values())
+                    .sort((a, b) => a.time - b.time)
+                    .slice(0, 10);
+        
+                // ========== 渲染排行榜 ==========
                 let html = '';
-                data.forEach((item, index) => {
+                rankData.forEach((item, index) => {
                     let rankClass = '';
                     if (index === 0) rankClass = 'top1';
                     else if (index === 1) rankClass = 'top2';
                     else if (index === 2) rankClass = 'top3';
-
+        
                     html += `
                         <div class="rank-item">
                             <div class="rank-num ${rankClass}">${index + 1}</div>
