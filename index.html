@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="theme-color" content="#81c784">
+    <title>舒尔特方格 - 专注力训练</title>
+    <style>
+        /* ========== 全局重置与基础样式 ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background-color: #f5f5f0; /* 浅米色护眼背景 */
+            color: #3a3a3a;
+            min-height: 100vh;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #4a5d4a;
+        }
+
+        /* ========== 计时显示区域 ========== */
+        .timer-panel {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 0 4px;
+        }
+
+        .timer-item {
+            font-size: 1rem;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .countdown-display {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #2e7d32;
+            transition: all 0.3s ease;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        /* 倒计时危险状态：剩余≤5秒时触发 */
+        .countdown-display.danger {
+            color: #c62828;
+            font-size: 1.8rem;
+            animation: shake 0.4s infinite ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            75% { transform: translateX(3px); }
+        }
+
+        /* ========== 提示文本 ========== */
+        .tip-bar {
+            margin-bottom: 14px;
+            font-size: 1rem;
+            color: #666;
+            height: 1.6rem;
+            font-weight: 500;
+        }
+
+        /* ========== 难度选择按钮 ========== */
+        .difficulty-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 18px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .btn {
+            flex: 1;
+            min-height: 48px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            background-color: #e8e8e0;
+            color: #555;
+            transition: all 0.2s ease;
+            touch-action: manipulation;
+        }
+
+        .btn.active {
+            background-color: #81c784;
+            color: white;
+            box-shadow: 0 2px 8px rgba(129, 199, 132, 0.3);
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        /* ========== 方格网格 ========== */
+        .grid-container {
+            width: 100%;
+            max-width: 500px;
+            display: grid;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .grid-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+            touch-action: manipulation;
+        }
+
+        /* 已完成格子样式 */
+        .grid-cell.completed {
+            background-color: #a5d6a7 !important;
+            color: #1b5e20;
+            cursor: default;
+            box-shadow: 0 2px 4px rgba(27, 94, 32, 0.15);
+        }
+
+        .grid-cell.completed::after {
+            content: "✓";
+            position: absolute;
+            font-size: 1rem;
+            bottom: 4px;
+            right: 6px;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+
+        /* 错误点击闪烁样式 */
+        .grid-cell.error {
+            background-color: #ef9a9a !important;
+            animation: error-flash 0.3s ease;
+        }
+
+        @keyframes error-flash {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        /* 胜利庆祝动画 */
+        .grid-cell.win-celebration {
+            animation: win-pop 0.7s ease-in-out;
+        }
+
+        @keyframes win-pop {
+            0% { transform: scale(1); }
+            30% { transform: scale(1.15); }
+            60% { transform: scale(0.95); }
+            100% { transform: scale(1); }
+        }
+
+        /* ========== 重新开始按钮 ========== */
+        .restart-button {
+            width: 100%;
+            max-width: 500px;
+            min-height: 50px;
+            margin-bottom: 22px;
+            background-color: #64b5f6;
+            color: white;
+            font-size: 1.05rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(100, 181, 246, 0.3);
+            touch-action: manipulation;
+        }
+
+        .restart-button:active {
+            background-color: #42a5f5;
+            transform: scale(0.98);
+        }
+
+        /* ========== 最佳成绩面板 ========== */
+        .score-panel {
+            width: 100%;
+            max-width: 500px;
+            background-color: white;
+            padding: 14px 16px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .score-panel h3 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            color: #4a5d4a;
+            font-weight: 600;
+        }
+
+        .score-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 0.9rem;
+            color: #666;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .score-row:last-child {
+            border-bottom: none;
+        }
+
+        /* ========== 结果弹窗 ========== */
+        .modal-mask {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 24px;
+        }
+
+        .modal-mask.show {
+            display: flex;
+        }
+
+        .modal-card {
+            background-color: white;
+            padding: 28px 24px;
+            border-radius: 14px;
+            width: 100%;
+            max-width: 360px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+
+        .modal-card h2 {
+            margin-bottom: 18px;
+            color: #333;
+            font-size: 1.4rem;
+        }
+
+        .modal-card p {
+            margin: 10px 0;
+            font-size: 1rem;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .modal-confirm-btn {
+            margin-top: 24px;
+            width: 100%;
+            min-height: 50px;
+            background-color: #81c784;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.05rem;
+            font-weight: 500;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .modal-confirm-btn:active {
+            background-color: #66bb6a;
+        }
+
+        /* ========== 小屏适配 ========== */
+        @media (max-width: 360px) {
+            .grid-cell {
+                font-size: 1.2rem;
+            }
+            .countdown-display {
+                font-size: 1.2rem;
+            }
+            .countdown-display.danger {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>舒尔特方格</h1>
+
+    <!-- 计时面板 -->
+    <div class="timer-panel">
+        <div class="timer-item">
+            用时：<span id="elapsedTime">00:00.000</span>
+        </div>
+        <div class="timer-item">
+            剩余：<span id="countdown" class="countdown-display">25.0</span>
+        </div>
+    </div>
+
+    <!-- 提示栏 -->
+    <div class="tip-bar" id="tipText">点击数字 1 开始挑战</div>
+
+    <!-- 难度选择 -->
+    <div class="difficulty-group">
+        <button class="btn" data-level="3">简单 3×3</button>
+        <button class="btn active" data-level="5">标准 5×5</button>
+        <button class="btn" data-level="6">困难 6×6</button>
+    </div>
+
+    <!-- 方格容器 -->
+    <div class="grid-container" id="gridContainer"></div>
+
+    <!-- 重新开始按钮 -->
+    <button class="restart-button" id="restartBtn">重新开始</button>
+
+    <!-- 最佳成绩 -->
+    <div class="score-panel">
+        <h3>最佳成绩</h3>
+        <div id="bestScoresList"></div>
+    </div>
+
+    <!-- 结果弹窗 -->
+    <div class="modal-mask" id="resultModal">
+        <div class="modal-card">
+            <h2 id="modalTitle">挑战完成！</h2>
+            <p id="modalTime">用时：00:00.000</p>
+            <p id="modalErrors">错误次数：0 次</p>
+            <p id="modalProgress" style="color: #888;"></p>
+            <button class="modal-confirm-btn" id="modalCloseBtn">再来一次</button>
+        </div>
+    </div>
+
+    <script>
+        // ========== PWA 配置（内嵌 manifest + Service Worker） ==========
+        (function initPWA() {
+            // 动态注入 manifest
+            const manifestData = {
+                name: "舒尔特方格专注力训练",
+                short_name: "舒尔特方格",
+                start_url: ".",
+                display: "standalone",
+                background_color: "#f5f5f0",
+                theme_color: "#81c784",
+                icons: [{
+                    src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgZmlsbD0iIzgxYzc4NCIgcng9IjMyIi8+PHRleHQgeD0iOTYiIHk9IjEyMCIgZm9udC1zaXplPSI4MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXdlaWdodD0iYm9sZCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0id2hpdGUiPlM8L3RleHQ+PC9zdmc+",
+                    sizes: "192x192",
+                    type: "image/svg+xml"
+                }]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/manifest+json' });
+            const manifestUrl = URL.createObjectURL(manifestBlob);
+            const link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = manifestUrl;
+            document.head.appendChild(link);
+
+            // 注册 Service Worker（仅 HTTPS/localhost 环境生效）
+            if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+                const swCode = `
+                    const CACHE_NAME = 'schulte-grid-v1';
+                    self.addEventListener('install', e => {
+                        e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.add('/')));
+                        self.skipWaiting();
+                    });
+                    self.addEventListener('activate', e => {
+                        e.waitUntil(clients.claim());
+                    });
+                    self.addEventListener('fetch', e => {
+                        e.respondWith(
+                            caches.match(e.request).then(res => res || fetch(e.request))
+                        );
+                    });
+                `;
+                const swBlob = new Blob([swCode], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(swBlob);
+                navigator.serviceWorker.register(swUrl).catch(() => {
+                    // 静默失败，不影响游戏使用
+                });
+            }
+        })();
+
+        // ========== 游戏核心配置 ==========
+        const GAME_CONFIG = {
+            3: { total: 9,  timeLimit: 12000, label: '简单 3×3' },  // 12秒
+            5: { total: 25, timeLimit: 25000, label: '标准 5×5' },  // 25秒
+            6: { total: 36, timeLimit: 40000, label: '困难 6×6' }   // 40秒
+        };
+
+        // ========== 游戏状态变量 ==========
+        let currentLevel = 5;          // 当前难度
+        let targetNumber = 1;          // 当前需要点击的数字
+        let errorCount = 0;            // 错误次数
+        let gameState = 'idle';        // 游戏状态：idle(待开始) / playing(进行中) / ended(已结束)
+        let startTime = 0;             // 游戏开始时间戳
+        let elapsed = 0;               // 已用时间(毫秒)
+        let remainingTime = 0;         // 剩余时间(毫秒)
+        let timerId = null;            // 定时器ID
+        let numbers = [];              // 当前方格数字数组
+
+        // DOM 元素引用
+        const gridContainer = document.getElementById('gridContainer');
+        const tipText = document.getElementById('tipText');
+        const elapsedEl = document.getElementById('elapsedTime');
+        const countdownEl = document.getElementById('countdown');
+        const restartBtn = document.getElementById('restartBtn');
+        const difficultyBtns = document.querySelectorAll('.difficulty-group .btn');
+        const resultModal = document.getElementById('resultModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalTime = document.getElementById('modalTime');
+        const modalErrors = document.getElementById('modalErrors');
+        const modalProgress = document.getElementById('modalProgress');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
+        const bestScoresList = document.getElementById('bestScoresList');
+
+        // ========== 工具函数 ==========
+
+        /**
+         * Fisher-Yates 洗牌算法，生成随机数字数组
+         * @param {number} size 方格边长
+         * @returns {number[]} 打乱后的数字数组
+         */
+        function shuffleNumbers(size) {
+            const total = size * size;
+            const arr = Array.from({ length: total }, (_, i) => i + 1);
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        /**
+         * 生成柔和护眼的背景色（HSL 色系）
+         * 每个数字对应不同色相，保持低饱和度、高明度
+         * @param {number} index 格子索引
+         * @param {number} total 总格子数
+         * @returns {string} HSL 颜色字符串
+         */
+        function getSoftColor(index, total) {
+            const hue = (index / total) * 360;  // 色相均匀分布
+            const saturation = 32;              // 低饱和度
+            const lightness = 88;               // 高明度
+            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        }
+
+        /**
+         * 格式化正向计时：分:秒.毫秒
+         * @param {number} ms 毫秒数
+         * @returns {string} 格式化后的时间字符串
+         */
+        function formatElapsedTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const milliseconds = Math.floor(ms % 1000);
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
+        }
+
+        /**
+         * 格式化倒计时：秒.十分之一秒
+         * @param {number} ms 毫秒数
+         * @returns {string} 格式化后的时间字符串
+         */
+        function formatCountdown(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const tenths = Math.floor((ms % 1000) / 100);
+            return `${seconds}.${tenths}`;
+        }
+
+        /**
+         * 触发手机震动反馈（错误时）
+         * 兼容不支持震动的设备
+         */
+        function triggerVibration() {
+            if (navigator.vibrate) {
+                navigator.vibrate(60); // 震动60毫秒
+            }
+        }
+
+        // ========== 游戏核心逻辑 ==========
+
+        /**
+         * 渲染方格网格
+         */
+        function renderGrid() {
+            const size = currentLevel;
+            const total = size * size;
+            numbers = shuffleNumbers(size);
+            
+            // 设置 Grid 列数
+            gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            gridContainer.innerHTML = '';
+
+            // 生成每个格子
+            numbers.forEach((num, index) => {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                cell.textContent = num;
+                cell.dataset.number = num;
+                // 每个格子分配独有的柔和背景色
+                cell.style.backgroundColor = getSoftColor(index, total);
+                
+                cell.addEventListener('click', () => handleCellClick(cell, num));
+                gridContainer.appendChild(cell);
+            });
+        }
+
+        /**
+         * 处理格子点击事件
+         * @param {HTMLElement} cell 点击的格子元素
+         * @param {number} num 格子数字
+         */
+        function handleCellClick(cell, num) {
+            // 游戏已结束，忽略点击
+            if (gameState === 'ended') return;
+
+            // 游戏未开始状态：只有点击数字1才启动游戏
+            if (gameState === 'idle') {
+                if (num === 1) {
+                    startGame();
+                    markCompleted(cell);
+                    targetNumber = 2;
+                    updateTip();
+                }
+                return;
+            }
+
+            // 游戏进行中
+            // 点击已完成的格子 → 错误
+            if (cell.classList.contains('completed')) {
+                showError(cell);
+                return;
+            }
+
+            // 点击正确数字
+            if (num === targetNumber) {
+                markCompleted(cell);
+                targetNumber++;
+                
+                // 检查是否全部完成（胜利）
+                if (targetNumber > GAME_CONFIG[currentLevel].total) {
+                    gameWin();
+                    return;
+                }
+                updateTip();
+            } 
+            // 点击错误数字
+            else {
+                showError(cell);
+            }
+        }
+
+        /**
+         * 标记格子为已完成状态
+         * @param {HTMLElement} cell 格子元素
+         */
+        function markCompleted(cell) {
+            cell.classList.add('completed');
+        }
+
+        /**
+         * 显示错误反馈
+         * @param {HTMLElement} cell 格子元素
+         */
+        function showError(cell) {
+            errorCount++;
+            triggerVibration();
+            cell.classList.add('error');
+            // 300ms后移除错误样式
+            setTimeout(() => {
+                cell.classList.remove('error');
+            }, 300);
+        }
+
+        /**
+         * 更新提示文本
+         */
+        function updateTip() {
+            tipText.textContent = `请点击数字 ${targetNumber}`;
+        }
+
+        /**
+         * 启动游戏（首次点击数字1时触发）
+         */
+        function startGame() {
+            gameState = 'playing';
+            startTime = Date.now();
+            remainingTime = GAME_CONFIG[currentLevel].timeLimit;
+            errorCount = 0;
+            targetNumber = 1;
+            
+            // 启动定时器，每10ms更新一次，保证精度
+            timerId = setInterval(updateTimers, 10);
+        }
+
+        /**
+         * 更新双计时器（正向计时 + 倒计时）
+         * 包含失败判定逻辑
+         */
+        function updateTimers() {
+            const now = Date.now();
+            elapsed = now - startTime;
+            remainingTime = GAME_CONFIG[currentLevel].timeLimit - elapsed;
+
+            // 更新正向计时显示
+            elapsedEl.textContent = formatElapsedTime(elapsed);
+
+            // 更新倒计时显示
+            countdownEl.textContent = formatCountdown(Math.max(0, remainingTime));
+
+            // 倒计时危险状态判定：剩余≤5秒时触发样式变化
+            if (remainingTime <= 5000) {
+                countdownEl.classList.add('danger');
+            } else {
+                countdownEl.classList.remove('danger');
+            }
+
+            // 倒计时归零 → 游戏失败
+            if (remainingTime <= 0) {
+                gameFail();
+            }
+        }
+
+        /**
+         * 游戏胜利处理
+         */
+        function gameWin() {
+            gameState = 'ended';
+            clearInterval(timerId);
+            countdownEl.classList.remove('danger');
+
+            // 胜利庆祝动画：所有格子依次播放缩放动画
+            const cells = document.querySelectorAll('.grid-cell');
+            cells.forEach((cell, i) => {
+                setTimeout(() => {
+                    cell.classList.add('win-celebration');
+                }, i * 30);
+            });
+
+            // 保存成绩
+            saveRecord(true);
+            updateBestScoresDisplay();
+
+            // 显示结果弹窗
+            setTimeout(() => {
+                showResultModal(true);
+            }, 800);
+        }
+
+        /**
+         * 游戏失败处理（倒计时归零）
+         */
+        function gameFail() {
+            gameState = 'ended';
+            clearInterval(timerId);
+            countdownEl.classList.remove('danger');
+            countdownEl.textContent = '0.0';
+
+            // 保存失败记录
+            saveRecord(false);
+
+            // 显示失败弹窗
+            showResultModal(false);
+        }
+
+        /**
+         * 显示结果弹窗
+         * @param {boolean} isWin 是否胜利
+         */
+        function showResultModal(isWin) {
+            if (isWin) {
+                modalTitle.textContent = '🎉 挑战成功！';
+                modalTime.textContent = `用时：${formatElapsedTime(elapsed)}`;
+                modalProgress.textContent = '';
+            } else {
+                modalTitle.textContent = '⏰ 时间到，挑战失败';
+                modalTime.textContent = `已用时：${formatElapsedTime(elapsed)}`;
+                modalProgress.textContent = `已完成到数字 ${targetNumber - 1}`;
+            }
+            modalErrors.textContent = `错误次数：${errorCount} 次`;
+            resultModal.classList.add('show');
+        }
+
+        /**
+         * 重置游戏（保留当前难度）
+         */
+        function resetGame() {
+            // 清除定时器
+            if (timerId) {
+                clearInterval(timerId);
+                timerId = null;
+            }
+
+            // 重置状态
+            gameState = 'idle';
+            targetNumber = 1;
+            errorCount = 0;
+            elapsed = 0;
+            remainingTime = GAME_CONFIG[currentLevel].timeLimit;
+
+            // 重置显示
+            elapsedEl.textContent = '00:00.000';
+            countdownEl.textContent = formatCountdown(remainingTime);
+            countdownEl.classList.remove('danger');
+            tipText.textContent = '点击数字 1 开始挑战';
+
+            // 关闭弹窗
+            resultModal.classList.remove('show');
+
+            // 重新渲染方格
+            renderGrid();
+        }
+
+        /**
+         * 切换游戏难度
+         * @param {number} level 难度等级（3/5/6）
+         */
+        function changeLevel(level) {
+            if (currentLevel === level) return;
+            
+            currentLevel = level;
+            
+            // 更新按钮激活状态
+            difficultyBtns.forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.level) === level);
+            });
+
+            // 重置游戏
+            resetGame();
+        }
+
+        // ========== 本地存储（成绩记录） ==========
+
+        /**
+         * 保存游戏记录到 localStorage
+         * @param {boolean} isWin 是否胜利
+         */
+        function saveRecord(isWin) {
+            const level = currentLevel;
+            const record = {
+                level,
+                time: elapsed,
+                errors: errorCount,
+                isWin,
+                timestamp: Date.now()
+            };
+
+            // 1. 更新最佳成绩（仅胜利时）
+            if (isWin) {
+                const bestKey = `schulte_best_${level}`;
+                const currentBest = localStorage.getItem(bestKey);
+                if (!currentBest || elapsed < parseInt(currentBest)) {
+                    localStorage.setItem(bestKey, elapsed.toString());
+                }
+            }
+
+            // 2. 更新最近5次历史记录
+            const historyKey = 'schulte_history';
+            let history = [];
+            try {
+                history = JSON.parse(localStorage.getItem(historyKey)) || [];
+            } catch (e) {
+                history = [];
+            }
+            history.unshift(record);
+            // 只保留最近5条
+            if (history.length > 5) {
+                history = history.slice(0, 5);
+            }
+            localStorage.setItem(historyKey, JSON.stringify(history));
+        }
+
+        /**
+         * 更新最佳成绩显示区域
+         */
+        function updateBestScoresDisplay() {
+            let html = '';
+            [3, 5, 6].forEach(level => {
+                const best = localStorage.getItem(`schulte_best_${level}`);
+                const timeStr = best ? formatElapsedTime(parseInt(best)) : '暂无记录';
+                html += `<div class="score-row">
+                    <span>${GAME_CONFIG[level].label}</span>
+                    <span>${timeStr}</span>
+                </div>`;
+            });
+            bestScoresList.innerHTML = html;
+        }
+
+        // ========== 事件绑定 ==========
+
+        // 难度切换按钮
+        difficultyBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const level = parseInt(btn.dataset.level);
+                changeLevel(level);
+            });
+        });
+
+        // 重新开始按钮
+        restartBtn.addEventListener('click', resetGame);
+
+        // 弹窗确认按钮
+        modalCloseBtn.addEventListener('click', () => {
+            resultModal.classList.remove('show');
+            resetGame();
+        });
+
+        // 点击弹窗遮罩关闭
+        resultModal.addEventListener('click', (e) => {
+            if (e.target === resultModal) {
+                resultModal.classList.remove('show');
+                resetGame();
+            }
+        });
+
+        // ========== 初始化 ==========
+        function init() {
+            renderGrid();
+            updateBestScoresDisplay();
+            countdownEl.textContent = formatCountdown(GAME_CONFIG[currentLevel].timeLimit);
+        }
+
+        // 页面加载完成后初始化
+        init();
+    </script>
+</body>
+</html>
