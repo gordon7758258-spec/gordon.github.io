@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <meta name="theme-color" content="#81c784">
     <title>舒尔特方格 - 专注力训练</title>
+    <!-- 引入Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         /* ========== 全局重置与基础样式 ========== */
         * {
@@ -18,7 +20,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-            background-color: #f5f5f0; /* 浅米色护眼背景 */
+            background-color: #f5f5f0;
             color: #3a3a3a;
             min-height: 100vh;
             padding: 16px;
@@ -33,6 +35,29 @@
             font-weight: 600;
             margin-bottom: 12px;
             color: #4a5d4a;
+        }
+
+        /* 昵称输入框 */
+        .nickname-bar {
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .nickname-input {
+            flex: 1;
+            height: 44px;
+            padding: 0 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: white;
+            outline: none;
+        }
+        .nickname-input:focus {
+            border-color: #81c784;
         }
 
         /* ========== 计时显示区域 ========== */
@@ -61,7 +86,6 @@
             text-align: right;
         }
 
-        /* 倒计时危险状态：剩余≤5秒时触发 */
         .countdown-display.danger {
             color: #c62828;
             font-size: 1.8rem;
@@ -140,7 +164,6 @@
             touch-action: manipulation;
         }
 
-        /* 已完成格子样式 */
         .grid-cell.completed {
             background-color: #a5d6a7 !important;
             color: #1b5e20;
@@ -158,7 +181,6 @@
             font-weight: bold;
         }
 
-        /* 错误点击闪烁样式 */
         .grid-cell.error {
             background-color: #ef9a9a !important;
             animation: error-flash 0.3s ease;
@@ -169,7 +191,6 @@
             50% { transform: scale(1.08); }
         }
 
-        /* 胜利庆祝动画 */
         .grid-cell.win-celebration {
             animation: win-pop 0.7s ease-in-out;
         }
@@ -203,7 +224,7 @@
             transform: scale(0.98);
         }
 
-        /* ========== 最佳成绩面板 ========== */
+        /* ========== 成绩面板 ========== */
         .score-panel {
             width: 100%;
             max-width: 500px;
@@ -233,6 +254,27 @@
         .score-row:last-child {
             border-bottom: none;
         }
+
+        /* 排行榜样式 */
+        .rank-item {
+            display: grid;
+            grid-template-columns: 30px 1fr auto auto;
+            gap: 10px;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 0.88rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .rank-num {
+            font-weight: bold;
+            color: #888;
+        }
+        .rank-num.top1 { color: #ff8f00; }
+        .rank-num.top2 { color: #90a4ae; }
+        .rank-num.top3 { color: #8d6e63; }
+        .rank-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rank-time { color: #2e7d32; font-weight: 500; }
+        .rank-level { font-size: 0.8rem; color: #999; }
 
         /* ========== 结果弹窗 ========== */
         .modal-mask {
@@ -296,20 +338,19 @@
 
         /* ========== 小屏适配 ========== */
         @media (max-width: 360px) {
-            .grid-cell {
-                font-size: 1.2rem;
-            }
-            .countdown-display {
-                font-size: 1.2rem;
-            }
-            .countdown-display.danger {
-                font-size: 1.5rem;
-            }
+            .grid-cell { font-size: 1.2rem; }
+            .countdown-display { font-size: 1.2rem; }
+            .countdown-display.danger { font-size: 1.5rem; }
         }
     </style>
 </head>
 <body>
     <h1>舒尔特方格</h1>
+
+    <!-- 昵称输入栏 -->
+    <div class="nickname-bar">
+        <input type="text" class="nickname-input" id="nicknameInput" placeholder="输入你的昵称（用于同步成绩）" maxlength="12">
+    </div>
 
     <!-- 计时面板 -->
     <div class="timer-panel">
@@ -337,10 +378,16 @@
     <!-- 重新开始按钮 -->
     <button class="restart-button" id="restartBtn">重新开始</button>
 
-    <!-- 最佳成绩 -->
+    <!-- 个人最佳成绩 -->
     <div class="score-panel">
-        <h3>最佳成绩</h3>
+        <h3>我的最佳成绩</h3>
         <div id="bestScoresList"></div>
+    </div>
+
+    <!-- 全服排行榜 -->
+    <div class="score-panel">
+        <h3>🏆 全服排行榜（标准5×5）</h3>
+        <div id="rankList"></div>
     </div>
 
     <!-- 结果弹窗 -->
@@ -355,9 +402,14 @@
     </div>
 
     <script>
-        // ========== PWA 配置（内嵌 manifest + Service Worker） ==========
+        // ===================== 请替换成你自己的Supabase参数 =====================
+        const SUPABASE_URL = "https://tjtqutpnimllkzsmqfbb.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqdHF1dHBuaW1sbGt6c21xZmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTc2NjMsImV4cCI6MjEwMDc3MzY2M30.PGrAXVzJd9Yys8yMo2ap5kfYvffGgl9xqs3BZWz1E8c";
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // =====================================================================
+
+        // ========== PWA 配置 ==========
         (function initPWA() {
-            // 动态注入 manifest
             const manifestData = {
                 name: "舒尔特方格专注力训练",
                 short_name: "舒尔特方格",
@@ -378,50 +430,43 @@
             link.href = manifestUrl;
             document.head.appendChild(link);
 
-            // 注册 Service Worker（仅 HTTPS/localhost 环境生效）
             if ('serviceWorker' in navigator && location.protocol !== 'file:') {
                 const swCode = `
-                    const CACHE_NAME = 'schulte-grid-v1';
+                    const CACHE_NAME = 'schulte-grid-v2';
                     self.addEventListener('install', e => {
                         e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.add('/')));
                         self.skipWaiting();
                     });
-                    self.addEventListener('activate', e => {
-                        e.waitUntil(clients.claim());
-                    });
+                    self.addEventListener('activate', e => e.waitUntil(clients.claim()));
                     self.addEventListener('fetch', e => {
-                        e.respondWith(
-                            caches.match(e.request).then(res => res || fetch(e.request))
-                        );
+                        e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
                     });
                 `;
                 const swBlob = new Blob([swCode], { type: 'application/javascript' });
                 const swUrl = URL.createObjectURL(swBlob);
-                navigator.serviceWorker.register(swUrl).catch(() => {
-                    // 静默失败，不影响游戏使用
-                });
+                navigator.serviceWorker.register(swUrl).catch(() => {});
             }
         })();
 
         // ========== 游戏核心配置 ==========
         const GAME_CONFIG = {
-            3: { total: 9,  timeLimit: 12000, label: '简单 3×3' },  // 12秒
-            5: { total: 25, timeLimit: 25000, label: '标准 5×5' },  // 25秒
-            6: { total: 36, timeLimit: 40000, label: '困难 6×6' }   // 40秒
+            3: { total: 9,  timeLimit: 12000, label: '简单 3×3' },
+            5: { total: 25, timeLimit: 25000, label: '标准 5×5' },
+            6: { total: 36, timeLimit: 40000, label: '困难 6×6' }
         };
 
         // ========== 游戏状态变量 ==========
-        let currentLevel = 5;          // 当前难度
-        let targetNumber = 1;          // 当前需要点击的数字
-        let errorCount = 0;            // 错误次数
-        let gameState = 'idle';        // 游戏状态：idle(待开始) / playing(进行中) / ended(已结束)
-        let startTime = 0;             // 游戏开始时间戳
-        let elapsed = 0;               // 已用时间(毫秒)
-        let remainingTime = 0;         // 剩余时间(毫秒)
-        let timerId = null;            // 定时器ID
-        let numbers = [];              // 当前方格数字数组
+        let currentLevel = 5;
+        let targetNumber = 1;
+        let errorCount = 0;
+        let gameState = 'idle'; // idle / playing / ended
+        let startTime = 0;
+        let elapsed = 0;
+        let remainingTime = 0;
+        let timerId = null;
+        let numbers = [];
 
-        // DOM 元素引用
+        // DOM 元素
         const gridContainer = document.getElementById('gridContainer');
         const tipText = document.getElementById('tipText');
         const elapsedEl = document.getElementById('elapsedTime');
@@ -435,14 +480,16 @@
         const modalProgress = document.getElementById('modalProgress');
         const modalCloseBtn = document.getElementById('modalCloseBtn');
         const bestScoresList = document.getElementById('bestScoresList');
+        const rankList = document.getElementById('rankList');
+        const nicknameInput = document.getElementById('nicknameInput');
+
+        // 初始化昵称（从本地存储读取）
+        nicknameInput.value = localStorage.getItem('schulte_nickname') || '';
+        nicknameInput.addEventListener('input', () => {
+            localStorage.setItem('schulte_nickname', nicknameInput.value.trim());
+        });
 
         // ========== 工具函数 ==========
-
-        /**
-         * Fisher-Yates 洗牌算法，生成随机数字数组
-         * @param {number} size 方格边长
-         * @returns {number[]} 打乱后的数字数组
-         */
         function shuffleNumbers(size) {
             const total = size * size;
             const arr = Array.from({ length: total }, (_, i) => i + 1);
@@ -453,25 +500,11 @@
             return arr;
         }
 
-        /**
-         * 生成柔和护眼的背景色（HSL 色系）
-         * 每个数字对应不同色相，保持低饱和度、高明度
-         * @param {number} index 格子索引
-         * @param {number} total 总格子数
-         * @returns {string} HSL 颜色字符串
-         */
         function getSoftColor(index, total) {
-            const hue = (index / total) * 360;  // 色相均匀分布
-            const saturation = 32;              // 低饱和度
-            const lightness = 88;               // 高明度
-            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+            const hue = (index / total) * 360;
+            return `hsl(${hue}, 32%, 88%)`;
         }
 
-        /**
-         * 格式化正向计时：分:秒.毫秒
-         * @param {number} ms 毫秒数
-         * @returns {string} 格式化后的时间字符串
-         */
         function formatElapsedTime(ms) {
             const totalSeconds = Math.floor(ms / 1000);
             const minutes = Math.floor(totalSeconds / 60);
@@ -480,65 +513,39 @@
             return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
         }
 
-        /**
-         * 格式化倒计时：秒.十分之一秒
-         * @param {number} ms 毫秒数
-         * @returns {string} 格式化后的时间字符串
-         */
         function formatCountdown(ms) {
             const seconds = Math.floor(ms / 1000);
             const tenths = Math.floor((ms % 1000) / 100);
             return `${seconds}.${tenths}`;
         }
 
-        /**
-         * 触发手机震动反馈（错误时）
-         * 兼容不支持震动的设备
-         */
         function triggerVibration() {
-            if (navigator.vibrate) {
-                navigator.vibrate(60); // 震动60毫秒
-            }
+            if (navigator.vibrate) navigator.vibrate(60);
         }
 
         // ========== 游戏核心逻辑 ==========
-
-        /**
-         * 渲染方格网格
-         */
         function renderGrid() {
             const size = currentLevel;
             const total = size * size;
             numbers = shuffleNumbers(size);
             
-            // 设置 Grid 列数
             gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
             gridContainer.innerHTML = '';
 
-            // 生成每个格子
             numbers.forEach((num, index) => {
                 const cell = document.createElement('div');
                 cell.className = 'grid-cell';
                 cell.textContent = num;
                 cell.dataset.number = num;
-                // 每个格子分配独有的柔和背景色
                 cell.style.backgroundColor = getSoftColor(index, total);
-                
                 cell.addEventListener('click', () => handleCellClick(cell, num));
                 gridContainer.appendChild(cell);
             });
         }
 
-        /**
-         * 处理格子点击事件
-         * @param {HTMLElement} cell 点击的格子元素
-         * @param {number} num 格子数字
-         */
         function handleCellClick(cell, num) {
-            // 游戏已结束，忽略点击
             if (gameState === 'ended') return;
 
-            // 游戏未开始状态：只有点击数字1才启动游戏
             if (gameState === 'idle') {
                 if (num === 1) {
                     startGame();
@@ -549,148 +556,94 @@
                 return;
             }
 
-            // 游戏进行中
-            // 点击已完成的格子 → 错误
             if (cell.classList.contains('completed')) {
                 showError(cell);
                 return;
             }
 
-            // 点击正确数字
             if (num === targetNumber) {
                 markCompleted(cell);
                 targetNumber++;
-                
-                // 检查是否全部完成（胜利）
                 if (targetNumber > GAME_CONFIG[currentLevel].total) {
                     gameWin();
                     return;
                 }
                 updateTip();
-            } 
-            // 点击错误数字
-            else {
+            } else {
                 showError(cell);
             }
         }
 
-        /**
-         * 标记格子为已完成状态
-         * @param {HTMLElement} cell 格子元素
-         */
         function markCompleted(cell) {
             cell.classList.add('completed');
         }
 
-        /**
-         * 显示错误反馈
-         * @param {HTMLElement} cell 格子元素
-         */
         function showError(cell) {
             errorCount++;
             triggerVibration();
             cell.classList.add('error');
-            // 300ms后移除错误样式
-            setTimeout(() => {
-                cell.classList.remove('error');
-            }, 300);
+            setTimeout(() => cell.classList.remove('error'), 300);
         }
 
-        /**
-         * 更新提示文本
-         */
         function updateTip() {
             tipText.textContent = `请点击数字 ${targetNumber}`;
         }
 
-        /**
-         * 启动游戏（首次点击数字1时触发）
-         */
         function startGame() {
             gameState = 'playing';
             startTime = Date.now();
             remainingTime = GAME_CONFIG[currentLevel].timeLimit;
             errorCount = 0;
             targetNumber = 1;
-            
-            // 启动定时器，每10ms更新一次，保证精度
             timerId = setInterval(updateTimers, 10);
         }
 
-        /**
-         * 更新双计时器（正向计时 + 倒计时）
-         * 包含失败判定逻辑
-         */
         function updateTimers() {
             const now = Date.now();
             elapsed = now - startTime;
             remainingTime = GAME_CONFIG[currentLevel].timeLimit - elapsed;
 
-            // 更新正向计时显示
             elapsedEl.textContent = formatElapsedTime(elapsed);
-
-            // 更新倒计时显示
             countdownEl.textContent = formatCountdown(Math.max(0, remainingTime));
 
-            // 倒计时危险状态判定：剩余≤5秒时触发样式变化
             if (remainingTime <= 5000) {
                 countdownEl.classList.add('danger');
             } else {
                 countdownEl.classList.remove('danger');
             }
 
-            // 倒计时归零 → 游戏失败
-            if (remainingTime <= 0) {
-                gameFail();
-            }
+            if (remainingTime <= 0) gameFail();
         }
 
-        /**
-         * 游戏胜利处理
-         */
         function gameWin() {
             gameState = 'ended';
             clearInterval(timerId);
             countdownEl.classList.remove('danger');
 
-            // 胜利庆祝动画：所有格子依次播放缩放动画
+            // 庆祝动画
             const cells = document.querySelectorAll('.grid-cell');
             cells.forEach((cell, i) => {
-                setTimeout(() => {
-                    cell.classList.add('win-celebration');
-                }, i * 30);
+                setTimeout(() => cell.classList.add('win-celebration'), i * 30);
             });
 
-            // 保存成绩
+            // 保存成绩（本地+云端）
             saveRecord(true);
             updateBestScoresDisplay();
+            loadRankList(); // 刷新排行榜
 
-            // 显示结果弹窗
-            setTimeout(() => {
-                showResultModal(true);
-            }, 800);
+            setTimeout(() => showResultModal(true), 800);
         }
 
-        /**
-         * 游戏失败处理（倒计时归零）
-         */
         function gameFail() {
             gameState = 'ended';
             clearInterval(timerId);
             countdownEl.classList.remove('danger');
             countdownEl.textContent = '0.0';
 
-            // 保存失败记录
             saveRecord(false);
-
-            // 显示失败弹窗
             showResultModal(false);
         }
 
-        /**
-         * 显示结果弹窗
-         * @param {boolean} isWin 是否胜利
-         */
         function showResultModal(isWin) {
             if (isWin) {
                 modalTitle.textContent = '🎉 挑战成功！';
@@ -705,61 +658,42 @@
             resultModal.classList.add('show');
         }
 
-        /**
-         * 重置游戏（保留当前难度）
-         */
         function resetGame() {
-            // 清除定时器
             if (timerId) {
                 clearInterval(timerId);
                 timerId = null;
             }
 
-            // 重置状态
             gameState = 'idle';
             targetNumber = 1;
             errorCount = 0;
             elapsed = 0;
             remainingTime = GAME_CONFIG[currentLevel].timeLimit;
 
-            // 重置显示
             elapsedEl.textContent = '00:00.000';
             countdownEl.textContent = formatCountdown(remainingTime);
             countdownEl.classList.remove('danger');
             tipText.textContent = '点击数字 1 开始挑战';
-
-            // 关闭弹窗
             resultModal.classList.remove('show');
 
-            // 重新渲染方格
             renderGrid();
         }
 
-        /**
-         * 切换游戏难度
-         * @param {number} level 难度等级（3/5/6）
-         */
         function changeLevel(level) {
             if (currentLevel === level) return;
-            
             currentLevel = level;
             
-            // 更新按钮激活状态
             difficultyBtns.forEach(btn => {
                 btn.classList.toggle('active', parseInt(btn.dataset.level) === level);
             });
 
-            // 重置游戏
             resetGame();
+            loadRankList(); // 切换难度刷新对应排行榜
         }
 
-        // ========== 本地存储（成绩记录） ==========
-
-        /**
-         * 保存游戏记录到 localStorage
-         * @param {boolean} isWin 是否胜利
-         */
+        // ========== 成绩存储：本地+云端双备份 ==========
         function saveRecord(isWin) {
+            const nickname = nicknameInput.value.trim() || '匿名玩家';
             const level = currentLevel;
             const record = {
                 level,
@@ -769,7 +703,7 @@
                 timestamp: Date.now()
             };
 
-            // 1. 更新最佳成绩（仅胜利时）
+            // 1. 本地存储
             if (isWin) {
                 const bestKey = `schulte_best_${level}`;
                 const currentBest = localStorage.getItem(bestKey);
@@ -778,25 +712,78 @@
                 }
             }
 
-            // 2. 更新最近5次历史记录
             const historyKey = 'schulte_history';
-            let history = [];
-            try {
-                history = JSON.parse(localStorage.getItem(historyKey)) || [];
-            } catch (e) {
-                history = [];
-            }
+            let history = JSON.parse(localStorage.getItem(historyKey)) || [];
             history.unshift(record);
-            // 只保留最近5条
-            if (history.length > 5) {
-                history = history.slice(0, 5);
-            }
+            if (history.length > 5) history = history.slice(0, 5);
             localStorage.setItem(historyKey, JSON.stringify(history));
+
+            // 2. 云端上传（仅胜利成绩计入排行榜）
+            if (isWin && SUPABASE_URL !== "你的Project URL") {
+                uploadToCloud(nickname, level, elapsed, errorCount);
+            }
         }
 
-        /**
-         * 更新最佳成绩显示区域
-         */
+        // 上传成绩到云端
+        async function uploadToCloud(nickname, level, time, errors) {
+            try {
+                await supabase.from('game_records').insert({
+                    nickname,
+                    level,
+                    time,
+                    errors
+                });
+            } catch (e) {
+                console.log('成绩上传失败（可能无网络）', e);
+            }
+        }
+
+        // 加载排行榜（默认加载当前难度Top10）
+        async function loadRankList() {
+            if (SUPABASE_URL === "你的Project URL") {
+                rankList.innerHTML = '<div style="color:#999;font-size:0.85rem;">配置Supabase后显示排行榜</div>';
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase
+                    .from('game_records')
+                    .select('nickname, time, level')
+                    .eq('level', currentLevel)
+                    .eq('is_win', true)
+                    .order('time', { ascending: true })
+                    .limit(10);
+
+                if (error) throw error;
+
+                if (data.length === 0) {
+                    rankList.innerHTML = '<div style="color:#999;font-size:0.85rem;">暂无记录，快来抢占榜首！</div>';
+                    return;
+                }
+
+                let html = '';
+                data.forEach((item, index) => {
+                    let rankClass = '';
+                    if (index === 0) rankClass = 'top1';
+                    else if (index === 1) rankClass = 'top2';
+                    else if (index === 2) rankClass = 'top3';
+
+                    html += `
+                        <div class="rank-item">
+                            <div class="rank-num ${rankClass}">${index + 1}</div>
+                            <div class="rank-name">${item.nickname}</div>
+                            <div class="rank-time">${formatElapsedTime(item.time)}</div>
+                            <div class="rank-level">${GAME_CONFIG[item.level].label}</div>
+                        </div>
+                    `;
+                });
+                rankList.innerHTML = html;
+            } catch (e) {
+                rankList.innerHTML = '<div style="color:#999;font-size:0.85rem;">排行榜加载失败</div>';
+            }
+        }
+
+        // 更新个人最佳显示
         function updateBestScoresDisplay() {
             let html = '';
             [3, 5, 6].forEach(level => {
@@ -811,25 +798,17 @@
         }
 
         // ========== 事件绑定 ==========
-
-        // 难度切换按钮
         difficultyBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                const level = parseInt(btn.dataset.level);
-                changeLevel(level);
+                changeLevel(parseInt(btn.dataset.level));
             });
         });
 
-        // 重新开始按钮
         restartBtn.addEventListener('click', resetGame);
-
-        // 弹窗确认按钮
         modalCloseBtn.addEventListener('click', () => {
             resultModal.classList.remove('show');
             resetGame();
         });
-
-        // 点击弹窗遮罩关闭
         resultModal.addEventListener('click', (e) => {
             if (e.target === resultModal) {
                 resultModal.classList.remove('show');
@@ -841,10 +820,10 @@
         function init() {
             renderGrid();
             updateBestScoresDisplay();
+            loadRankList();
             countdownEl.textContent = formatCountdown(GAME_CONFIG[currentLevel].timeLimit);
         }
 
-        // 页面加载完成后初始化
         init();
     </script>
 </body>
